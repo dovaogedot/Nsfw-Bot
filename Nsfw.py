@@ -18,7 +18,7 @@ class NsfwBot:
 	@staticmethod
 	def init():
 		NsfwBot.nsfw_chats = dict()
-		NsfwBot.token = environ.get('TG_TOKEN')
+		NsfwBot.token = environ.get('TG_NSFW_TOKEN')
 		NsfwBot.chats = 'chats.json'
 
 		# load info from file
