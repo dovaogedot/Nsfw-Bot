@@ -88,6 +88,7 @@ class NsfwBot:
 			bot.sendMessage(update.message.chat.id, 'You are not allowed to set NSFW chat. Only admins can do this.')
 			return
 		try:
+
 			chat = bot.getChat(args[0])
 			NsfwBot.nsfw_chats[str(update.message.chat.id)] = str(chat.id)
 			bot.sendMessage(update.message.chat.id,
@@ -97,7 +98,7 @@ class NsfwBot:
 				json.dump(NsfwBot.nsfw_chats, f)
 		except BadRequest:
 			bot.sendMessage(update.message.chat.id,
-			                'Please, send a valid chat id. For groups, don\'t miss:\n"-" symbol before ids\n"@" symbol before usernames')
+			                'Please, send a valid chat id. For users only IDs are allowed, not usernames. For groups, don\'t miss:\n"-" symbol before ids\n"@" symbol before usernames')
 
 
 if __name__ == '__main__':
