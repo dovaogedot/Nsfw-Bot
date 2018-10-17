@@ -1,6 +1,6 @@
 from telegram.ext import Updater, Dispatcher, CommandHandler
 from telegram import Chat
-from telegram.error import BadRequest
+from telegram.error import BadRequest, Unauthorized
 import logging, json
 from os.path import exists
 from os import environ
@@ -49,17 +49,27 @@ class NsfwBot:
 
 	@staticmethod
 	def nsfw(bot, update):
-		if not NsfwBot.nsfw_chats[str(update.message.chat.id)]:
-			bot.sendMessage(update.message.chat.id, 'Set NSFW chat first with /setnsfw <id> command.')
+		try:
+			if not NsfwBot.nsfw_chats[str(update.message.chat.id)]:
+				bot.sendMessage(update.message.chat.id, 'Set NSFW chat first with /setnsfw <id> command.')
+				return
+		except KeyError:
+			bot.sendMessage(update.message.chat.id,
+			                'Set NSFW chat first with /setnsfw <id> command.')
 			return
 		# NOTE: if you reply to your own message reply_to_message is somewhy not set
 		if update.message.reply_to_message is not None:
 			# do not forward FROM nsfw chat
 			if update.message.chat.id != NsfwBot.nsfw_chats[str(update.message.chat.id)]:
-				bot.forwardMessage(
-					NsfwBot.nsfw_chats[str(update.message.chat.id)],
-					update.message.reply_to_message.chat.id,
-					message_id=update.message.reply_to_message.message_id)
+				try:
+					bot.forwardMessage(
+						NsfwBot.nsfw_chats[str(update.message.chat.id)],
+						update.message.reply_to_message.chat.id,
+						message_id=update.message.reply_to_message.message_id)
+				except BadRequest as e:
+					logging.debug('Something wrong. %s' % e.with_traceback)
+				except Unauthorized:
+					bot.sendMessage(update.message.chat.id, 'Add me to NSFW group first.')
 				try:
 					bot.deleteMessage(update.message.chat.id, update.message.reply_to_message.message_id)
 					bot.deleteMessage(update.message.chat.id, update.message.message_id)
@@ -87,6 +97,6 @@ class NsfwBot:
 
 
 if __name__ == '__main__':
-	logging.basicConfig(format='%(asctime)-16s %(levelname)-8s %(message)s', datefmt='%d-%m %H:%M:%S', level=logging.WARNING)
+	logging.basicConfig(format='%(asctime)-16s %(levelname)-8s %(message)s', datefmt='%d-%m %H:%M:%S', level=logging.DEBUG)
 	NsfwBot.init()
 	NsfwBot.start()
