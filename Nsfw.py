@@ -83,6 +83,10 @@ class NsfwBot:
 
 	@staticmethod
 	def setnsfw(bot, update, args):
+		admins = bot.getChatAdministrators(update.message.chat.id)
+		if update.message.from_user.id not in [x.user.id for x in admins]:
+			bot.sendMessage(update.message.chat.id, 'You are not allowed to set NSFW chat. Only admins can do this.')
+			return
 		try:
 			chat = bot.getChat(args[0])
 			NsfwBot.nsfw_chats[str(update.message.chat.id)] = str(chat.id)
