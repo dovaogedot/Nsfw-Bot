@@ -4,6 +4,7 @@ from telegram.error import BadRequest, Unauthorized
 import logging, json
 from os.path import exists
 from os import environ
+from time import time
 
 class NsfwBot:
 
@@ -63,11 +64,21 @@ class NsfwBot:
 			if update.message.chat.id != NsfwBot.nsfw_chats[str(update.message.chat.id)]:
 				try:
 					bot.forwardMessage(
-						NsfwBot.nsfw_chats[str(update.message.chat.id)],
-						update.message.reply_to_message.chat.id,
-						message_id=update.message.reply_to_message.message_id)
+							NsfwBot.nsfw_chats[str(update.message.chat.id)],
+							update.message.reply_to_message.chat.id,
+							message_id=update.message.reply_to_message.message_id)
+					link = ''
+					try:
+						chat = bot.getChat(NsfwBot.nsfw_chats[str(update.message.chat.id)])
+						link ='[@%s](%s)' % (chat.username, 't.me/%s' % chat.username)
+					except BadRequest:
+						link = '[%s](%s)' % ('here', 't.me/%s' % NsfwBot.nsfw_chats[str(update.message.chat.id)])
+					hashtag = '#%d' % int(time())
+					bot.sendMessage(update.message.chat.id, 'NSFW -> %s -> %s' % (link, hashtag), 'Markdown')
+					bot.sendMessage(NsfwBot.nsfw_chats[str(update.message.chat.id)], '%s' % (hashtag), 'Markdown')
+					pass
 				except BadRequest as e:
-					logging.debug('Something wrong. %s' % e.with_traceback)
+					logging.debug('Something wrong. %s' % e.message)
 				except Unauthorized:
 					bot.sendMessage(update.message.chat.id, 'Add me to NSFW group first.')
 				try:
