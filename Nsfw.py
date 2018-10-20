@@ -4,33 +4,28 @@ from telegram.error import BadRequest, Unauthorized
 import logging, json
 from os.path import exists
 from os import environ
+import psycopg2
 
 class NsfwBot:
-
-	nsfw_chats: dict
 
 	token: str
 	updater: Updater
 	dispatcher: Dispatcher
 
-	chats: str
+	conn: psycopg2.extensions.connection
+	cur: psycopg2.extensions.cursor
 
 	@staticmethod
 	def init():
-		NsfwBot.nsfw_chats = dict()
 		NsfwBot.token = environ.get('TG_NSFW_TOKEN')
-		NsfwBot.chats = 'chats.json'
 
-		# load info from file
-		if exists(NsfwBot.chats):
-			with open(NsfwBot.chats, 'r') as f:
-				try:
-					NsfwBot.nsfw_chats = json.load(f)
-					logging.debug('Chats loaded from %s.' % NsfwBot.chats)
-				except json.decoder.JSONDecodeError:
-					logging.debug('Failed to load chats from file.')
-
-
+		# check if db exists
+		NsfwBot.conn = psycopg2.connect(environ.get('DATABASE_URL'))
+		NsfwBot.cur = NsfwBot.conn.cursor()
+		NsfwBot.cur.execute("SELECT EXISTS(SELECT * FROM information_schema.tables WHERE table_name=%s)", ('chats',))
+		if not NsfwBot.cur.fetchone()[0]:
+			NsfwBot.cur.execute("CREATE TABLE chats(id SERIAL PRIMARY KEY, chat BIGINT UNIQUE, nsfw BIGINT)")
+			NsfwBot.conn.commit()
 
 		# init bot
 		NsfwBot.updater = Updater(token=NsfwBot.token)
@@ -49,21 +44,30 @@ class NsfwBot:
 
 	@staticmethod
 	def nsfw(bot, update):
+		# fetch data from db
+		nsfw_chats = dict()
+		NsfwBot.cur.execute("SELECT * FROM chats")
+		q = NsfwBot.cur.fetchall()
+		for _, chat, nsfw in q:
+			nsfw_chats[chat] = nsfw
+
+		# check if nsfw chat set
 		try:
-			if not NsfwBot.nsfw_chats[str(update.message.chat.id)]:
+			if not nsfw_chats[update.message.chat.id]:
 				bot.sendMessage(update.message.chat.id, 'Set NSFW chat first with /setnsfw <id> command.')
 				return
 		except KeyError:
 			bot.sendMessage(update.message.chat.id,
 			                'Set NSFW chat first with /setnsfw <id> command.')
 			return
-		# NOTE: if you reply to your own message reply_to_message is somewhy not set
+
 		if update.message.reply_to_message is not None:
 			# do not forward FROM nsfw chat
-			if update.message.chat.id != NsfwBot.nsfw_chats[str(update.message.chat.id)]:
+			if update.message.chat.id != nsfw_chats[update.message.chat.id]:
 				try:
+					# forward nsfw message
 					bot.forwardMessage(
-						NsfwBot.nsfw_chats[str(update.message.chat.id)],
+						nsfw_chats[update.message.chat.id],
 						update.message.reply_to_message.chat.id,
 						message_id=update.message.reply_to_message.message_id)
 				except BadRequest as e:
@@ -71,6 +75,7 @@ class NsfwBot:
 				except Unauthorized:
 					bot.sendMessage(update.message.chat.id, 'Add me to NSFW group first.')
 				try:
+					# delete messages
 					bot.deleteMessage(update.message.chat.id, update.message.reply_to_message.message_id)
 					bot.deleteMessage(update.message.chat.id, update.message.message_id)
 				except BadRequest:
@@ -88,14 +93,12 @@ class NsfwBot:
 			bot.sendMessage(update.message.chat.id, 'You are not allowed to set NSFW chat. Only admins can do this.')
 			return
 		try:
-
 			chat = bot.getChat(args[0])
-			NsfwBot.nsfw_chats[str(update.message.chat.id)] = str(chat.id)
+			result = NsfwBot.cur.execute("INSERT INTO chats (chat, nsfw) VALUES (%s, %s) ON CONFLICT (chat) DO UPDATE SET nsfw=%s", (update.message.chat.id, chat.id, chat.id))
+			NsfwBot.conn.commit()
 			bot.sendMessage(update.message.chat.id,
 							'NSFW messages will be sent to "%s".' %
                             (chat.first_name if chat.title is None else chat.title))
-			with open(NsfwBot.chats, 'w') as f:
-				json.dump(NsfwBot.nsfw_chats, f)
 		except BadRequest:
 			bot.sendMessage(update.message.chat.id,
 			                'Please, send a valid chat id. For users only IDs are allowed, not usernames. For groups, don\'t miss:\n"-" symbol before ids\n"@" symbol before usernames')
