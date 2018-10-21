@@ -1,7 +1,7 @@
 from telegram.ext import Updater, Dispatcher, CommandHandler
 from telegram import Chat
 from telegram.error import BadRequest, Unauthorized
-import logging, json
+import logging, json, time
 from os.path import exists
 from os import environ
 import psycopg2
@@ -79,27 +79,43 @@ class NsfwBot:
 			nsfw_chats[chat] = nsfw
 
 		if update.message.reply_to_message is not None:
-			# do not forward FROM nsfw chat
-			if update.message.chat.id != nsfw_chats[update.message.chat.id]:
-				try:
-					# forward nsfw message
-					if update.message.chat.id in nsfw_chats.keys():
+			try:
+				# forward nsfw message
+				if update.message.chat.id in nsfw_chats.keys():
+					# do not forward FROM nsfw chat
+					if update.message.chat.id != nsfw_chats[update.message.chat.id]:
+						# forward nsfw
 						bot.forwardMessage(
 							nsfw_chats[update.message.chat.id],
 							update.message.reply_to_message.chat.id,
 							message_id=update.message.reply_to_message.message_id)
-				except BadRequest as e:
-					logging.debug('Something wrong. %s' % e.with_traceback)
-				except Unauthorized:
-					bot.sendMessage(update.message.chat.id, 'Add me to NSFW group first.')
-				try:
-					# delete messages
-					bot.deleteMessage(update.message.chat.id, update.message.reply_to_message.message_id)
-					bot.deleteMessage(update.message.chat.id, update.message.message_id)
-				except BadRequest:
-					bot.sendMessage(update.message.chat.id, 'I need to have admin priviliges to delete messages.')
-			else:
-				bot.sendMessage(update.message.chat.id, 'This is the NSFW chat.')
+						# send hashtag
+						hashtag = '#nsfw%d' % int(time.time())
+						try:
+							chat = bot.getChat(nsfw_chats[update.message.chat.id])
+							if chat.type in ('supergroup', 'channel'):
+								hashtag += ' @%s' % chat.username
+						except:
+							pass
+						source = bot.sendMessage(nsfw_chats[update.message.chat.id], hashtag)
+						# forward hashtag back
+						bot.forwardMessage(
+							update.message.chat.id,
+							source.chat.id,
+							message_id=source.message_id)
+					else:
+						bot.sendMessage(update.message.chat.id, 'This is the NSFW chat.')
+			except BadRequest as e:
+				logging.debug('Something wrong. %s' % e.with_traceback)
+			except Unauthorized:
+				bot.sendMessage(update.message.chat.id, 'Add me to NSFW group first.')
+
+			try:
+				# delete messages
+				bot.deleteMessage(update.message.chat.id, update.message.reply_to_message.message_id)
+				bot.deleteMessage(update.message.chat.id, update.message.message_id)
+			except BadRequest:
+				bot.sendMessage(update.message.chat.id, 'I need to have admin priviliges to delete messages.')
 		else:
 			bot.sendMessage(update.message.chat.id, 'Reply to a message with /nsfw.')
 
