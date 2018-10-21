@@ -5,7 +5,6 @@ import logging, json
 from os.path import exists
 from os import environ
 import psycopg2
-from random import choice
 
 class NsfwBot:
 
@@ -16,20 +15,9 @@ class NsfwBot:
 	conn: psycopg2.extensions.connection
 	cur: psycopg2.extensions.cursor
 
-	lulz: list
-
 	@staticmethod
 	def init():
 		NsfwBot.token = environ.get('TG_NSFW_TOKEN')
-		NsfwBot.lulz =[
-			'Do not expect NSFW from me.',
-			'Disgusting.',
-			'Sorry, I don\'t have horn to pleasure you. Talk to Rem.',
-			'Korosu.',
-			'I am not Emilia.',
-			'One more and I will ban you',
-			'Do you like guro?'
-		]
 
 		# check if db exists
 		NsfwBot.conn = psycopg2.connect(environ.get('DATABASE_URL'))
@@ -102,15 +90,15 @@ class NsfwBot:
 	def setnsfw(bot, update, args):
 		try:
 			admins = bot.getChatAdministrators(update.message.chat.id)
-			if update.message.from_user.id not in [x.user.id for x in admins]:
-				bot.sendMessage(update.message.chat.id, 'You are not allowed to set NSFW chat. Only admins can do this.')
-				return
-		except BadRequest:
-			if update.message.chat.id == update.message.from_user.id:
-				bot.sendMessage(update.message.chat.id, choice(NsfwBot.lulz))
+			
+		if update.message.from_user.id not in [x.user.id for x in admins]:
+			bot.sendMessage(update.message.chat.id, 'You are not allowed to set NSFW chat. Only admins can do this.')
+			return
+		except:
+			pass
 		try:
 			chat = bot.getChat(args[0])
-			NsfwBot.cur.execute("INSERT INTO chats (chat, nsfw) VALUES (%s, %s) ON CONFLICT (chat) DO UPDATE SET nsfw=%s", (update.message.chat.id, chat.id, chat.id))
+			result = NsfwBot.cur.execute("INSERT INTO chats (chat, nsfw) VALUES (%s, %s) ON CONFLICT (chat) DO UPDATE SET nsfw=%s", (update.message.chat.id, chat.id, chat.id))
 			NsfwBot.conn.commit()
 			bot.sendMessage(update.message.chat.id,
 							'NSFW messages will be sent to "%s".' %
