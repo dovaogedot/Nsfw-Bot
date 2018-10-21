@@ -46,12 +46,24 @@ class NsfwBot:
 		# set up commands
 		NsfwBot.dispatcher.add_handler(CommandHandler('nsfw', NsfwBot.nsfw))
 		NsfwBot.dispatcher.add_handler(CommandHandler('setnsfw', NsfwBot.setnsfw, pass_args=True))
+		NsfwBot.dispatcher.add_handler(CommandHandler('start', NsfwBot.start_))
+		NsfwBot.dispatcher.add_handler(CommandHandler('help', NsfwBot.help))
 
 
 	@staticmethod
 	def start():
 		NsfwBot.updater.start_polling()
 		NsfwBot.updater.idle()
+
+
+	@staticmethod
+	def start_(bot, update):
+		bot.sendMessage(update.message.chat.id, 'What?')
+
+
+	@staticmethod
+	def help(bot, update):
+		bot.sendMessage(update.message.chat.id, 'Visit gitlab.com/dovaogedot/nsfw-bot for help.')
 
 
 	@staticmethod
@@ -66,25 +78,16 @@ class NsfwBot:
 		for _, chat, nsfw in q:
 			nsfw_chats[chat] = nsfw
 
-		# check if nsfw chat set
-		try:
-			if not nsfw_chats[update.message.chat.id]:
-				bot.sendMessage(update.message.chat.id, 'Set NSFW chat first with /setnsfw <id> command.')
-				return
-		except KeyError:
-			bot.sendMessage(update.message.chat.id,
-			                'Set NSFW chat first with /setnsfw <id> command.')
-			return
-
 		if update.message.reply_to_message is not None:
 			# do not forward FROM nsfw chat
 			if update.message.chat.id != nsfw_chats[update.message.chat.id]:
 				try:
 					# forward nsfw message
-					bot.forwardMessage(
-						nsfw_chats[update.message.chat.id],
-						update.message.reply_to_message.chat.id,
-						message_id=update.message.reply_to_message.message_id)
+					if update.message.chat.id in nsfw_chats.keys():
+						bot.forwardMessage(
+							nsfw_chats[update.message.chat.id],
+							update.message.reply_to_message.chat.id,
+							message_id=update.message.reply_to_message.message_id)
 				except BadRequest as e:
 					logging.debug('Something wrong. %s' % e.with_traceback)
 				except Unauthorized:
@@ -109,13 +112,19 @@ class NsfwBot:
 				bot.sendMessage(update.message.chat.id, 'You are not allowed to set NSFW chat. Only admins can do this.')
 				return
 			try:
-				chat = bot.getChat(args[0])
-				NsfwBot.cur.execute("INSERT INTO chats (chat, nsfw) VALUES (%s, %s) ON CONFLICT (chat) DO UPDATE SET nsfw=%s",
-									(update.message.chat.id, chat.id, chat.id))
-				NsfwBot.conn.commit()
-				bot.sendMessage(update.message.chat.id,
-                            'NSFW messages will be sent to "%s".' %
-                            (chat.first_name if chat.title is None else chat.title))
+				if args[0] == '/dev/null':
+					# remove from db
+					NsfwBot.cur.execute("DELETE FROM chats WHERE chat = %d", (update.message.chat.id,))
+					bot.sendMessage(update.message.chat.id, 'Okay. Just delete.')
+				else:
+					# add to db
+					chat = bot.getChat(args[0])
+					NsfwBot.cur.execute("INSERT INTO chats (chat, nsfw) VALUES (%s, %s) ON CONFLICT (chat) DO UPDATE SET nsfw=%s",
+										(update.message.chat.id, chat.id, chat.id))
+					NsfwBot.conn.commit()
+					bot.sendMessage(update.message.chat.id,
+								'NSFW messages will be sent to "%s".' %
+								(chat.first_name if chat.title is None else chat.title))
 			except BadRequest:
 				bot.sendMessage(update.message.chat.id,
 								'Please, send a valid chat id. For users only IDs are allowed, not usernames. For groups, don\'t miss:\n"-" symbol before ids\n"@" symbol before usernames')
