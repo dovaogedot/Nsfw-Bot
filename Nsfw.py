@@ -114,7 +114,7 @@ class NsfwBot:
 			try:
 				if args[0] == '/dev/null':
 					# remove from db
-					NsfwBot.cur.execute("DELETE FROM chats WHERE chat = %d", (update.message.chat.id,))
+					NsfwBot.cur.execute("DELETE FROM chats WHERE chat = %s", (update.message.chat.id,))
 					bot.sendMessage(update.message.chat.id, 'Okay. Just delete.')
 				else:
 					# add to db
